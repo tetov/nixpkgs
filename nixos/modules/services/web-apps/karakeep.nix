@@ -116,13 +116,32 @@
       };
     };
 
-    meilisearch.enable = lib.mkEnableOption ''
-      Enable Meilisearch and configure Karakeep to use it. Meilisearch is
-      required for text search.
+    meilisearch = {
+      enable = lib.mkEnableOption ''
+        Enable Meilisearch and configure Karakeep to use it. Meilisearch is
+        required for text search.
 
-      See [](#module-services-meilisearch) in the NixOS manual.
-    '';
+        See [](#module-services-meilisearch) in the NixOS manual.
+      '';
 
+      # TODO: remove when this is either handled by karakeep or becomes default
+      #       in services.meilisearch.
+      dumplessUpgrade = lib.mkOption {
+        default = true;
+        description = ''
+          Whether to enable (experimental) dumpless upgrade of the search index.
+
+          Allows upgrading Meilisearch without manually dumping and importing
+          the database.
+
+          {option}`services.meilisearch.dumplessUpgrade` overrides this option
+          if set explicitly.
+
+          More information at https://www.meilisearch.com/docs/learn/update_and_migration/updating#dumpless-upgrade
+        '';
+        type = lib.types.bool;
+      };
+    };
   };
 
   config =
@@ -141,7 +160,11 @@
       };
       users.groups = lib.mkIf (cfg.group == "karakeep") { karakeep = { }; };
 
-      services.meilisearch.enable = cfg.meilisearch.enable;
+      services.meilisearch = lib.mkIf cfg.meilisearch.enable {
+        enable = true;
+        # mkDefault so this doesn't override
+        dumplessUpgrade = lib.mkDefault cfg.meilisearch.dumplessUpgrade;
+      };
 
       services.karakeep = {
         extraEnvironment = {
@@ -160,6 +183,7 @@
       };
 
       systemd.tmpfiles.settings."karakeep".${dataDir}.d = { inherit (cfg) user group; };
+
       systemd.services =
         let
           sharedServiceConfigAttrs = {
